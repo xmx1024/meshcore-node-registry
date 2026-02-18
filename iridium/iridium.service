@@ -1,0 +1,19 @@
+[Unit]
+Description=Iridium MeshCore Node Registry
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/iridium
+ExecStart=/usr/bin/node /opt/iridium/server.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+
+# Harden the service
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

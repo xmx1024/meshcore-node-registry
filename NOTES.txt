@@ -1,0 +1,115 @@
+IRIDIUM MC NODES — Project Notes
+==================================
+Last updated: 2026-02-18
+
+OVERVIEW
+--------
+MeshCore LoRa mesh network node registry. A self-hosted web app for cataloging
+and managing radio nodes in the "Iridium" mesh network.
+
+Stack: Node.js 20 + Express, flat JSON storage, single-page frontend (no build step).
+Deployed on an Ubuntu 22.04 LXC container behind nginx.
+
+DEPLOYMENT
+----------
+- LXC container IP: <container-ip>
+- SSH: root@<container-ip> (key-based auth preferred)
+- App location: /opt/iridium
+- Runs as: www-data user via systemd
+- Service: iridium.service (enabled, auto-starts on boot)
+- nginx: reverse proxies port 80 -> 127.0.0.1:3000
+- Domain: <your-domain> (behind Cloudflare reverse proxy for SSL)
+- Internal port: 3000
+
+KEY FILES ON SERVER
+-------------------
+/opt/iridium/server.js          — Express backend (API + catch-all SPA routing)
+/opt/iridium/public/index.html  — Entire frontend (HTML/CSS/JS, single file)
+/opt/iridium/config.json        — Port, bcrypt password hash, session secret (mode 600)
+/opt/iridium/data/nodes.json    — Node data (flat JSON, owned by www-data)
+/opt/iridium/setup.js           — Interactive setup wizard (generates config.json)
+/etc/systemd/system/iridium.service
+/etc/nginx/sites-enabled/iridium
+
+USEFUL COMMANDS (on the container)
+----------------------------------
+sudo systemctl status iridium
+sudo systemctl restart iridium
+sudo journalctl -u iridium -f          # live logs
+sudo nginx -t && sudo systemctl reload nginx
+
+DEPLOYING CHANGES
+-----------------
+Local source is at: <local-path>/iridium/
+To deploy updates:
+  scp <file> root@<container-ip>:/opt/iridium/<path>
+  ssh root@<container-ip> "chown www-data:www-data /opt/iridium/<path>"
+  ssh root@<container-ip> "systemctl restart iridium"   # only needed for server.js changes
+
+Static file changes (index.html) take effect immediately without restart.
+
+SSH NOTES
+---------
+Key-based auth is preferred. From machines without a registered key, use password auth.
+sshpass does NOT work correctly on macOS — use expect instead:
+
+  expect << 'EOF'
+  set timeout 30
+  spawn scp -o StrictHostKeyChecking=no <local-file> root@<container-ip>:<remote-path>
+  expect "password:"
+  send "<password>\r"
+  expect eof
+  EOF
+
+  expect << 'EOF'
+  set timeout 30
+  spawn ssh -o StrictHostKeyChecking=no root@<container-ip> "<command>"
+  expect "password:"
+  send "<password>\r"
+  expect eof
+  EOF
+
+NODE TYPES
+----------
+- room-server  (blue badge, --accent2 color)
+- repeater     (amber badge, --warning color)
+- client       (green badge, --success color)
+Note: "core" was removed — it's not a real MeshCore node type.
+
+NODE STATUS
+-----------
+Each node has an active/inactive flag:
+- active:   green status badge, card displays normally
+- inactive: red status badge, card is dimmed (for planned/offline nodes)
+Existing nodes without a status field default to "active" in the UI.
+
+FEATURES
+--------
+- Public read: anyone can view nodes, search, and filter by type
+- Admin mode: password-protected, enables add/edit/delete
+- Search: real-time filtering across all node fields
+- Type filters: All / Room Server / Repeater / Client
+- Stats chips in header: total, room server, repeater, client counts
+- Single node view: visit /<node-id> (case-insensitive) to see one node
+  as a centered overlay with blurred background + close button
+- Page title: "IRIDIUM MC NODES" (single node: "IRIDIUM MC NODES — <id>")
+
+SECURITY
+--------
+- Passwords: bcrypt hashed (cost factor 12), never stored in plaintext
+- Session: random 48-byte secret, httpOnly cookies, sameSite=lax
+- Rate limiting: 4 failed login attempts -> 5 minute lockout per IP
+- Cloudflare-aware: trusts CF-Connecting-IP header for rate limiting
+- trust proxy enabled in Express for correct IP resolution
+- Cookie secure flag: currently false (set to true when Cloudflare SSL is active)
+- Brute-force delay: 500ms on failed attempts
+- systemd hardened: NoNewPrivileges, PrivateTmp
+
+TODO / FUTURE
+-------------
+- Point DNS and set up Cloudflare reverse proxy for SSL
+- Flip cookie secure flag to true once behind Cloudflare
+- Consider: map view of node locations
+- Consider: node uptime/status monitoring integration
+- The MemoryStore warning in logs is harmless for this scale but could
+  swap to connect-session-file or similar if needed

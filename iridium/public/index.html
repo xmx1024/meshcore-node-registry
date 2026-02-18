@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IRIDIUM MC NODES</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #080c10;
+      --surface: #0d1520;
+      --surface2: #111d2e;
+      --border: #1a2f45;
+      --accent: #00c8ff;
+      --accent2: #0066ff;
+      --text: #c8dff0;
+      --text-dim: #4a6a85;
+      --danger: #ff4466;
+      --success: #00e5a0;
+      --warning: #ffaa00;
+      --mono: 'Share Tech Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,200,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,200,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: relative; z-index: 10;
+      padding: 32px 40px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      justify-content: space-between;
+      gap: 20px; flex-wrap: wrap;
+    }
+
+    .logo-block { display: flex; flex-direction: column; gap: 4px; }
+
+    .logo {
+      font-family: var(--sans); font-weight: 800; font-size: 2rem;
+      letter-spacing: 0.15em; color: #fff;
+      text-shadow: 0 0 30px rgba(0,200,255,0.5), 0 0 60px rgba(0,200,255,0.2);
+    }
+    .logo span { color: var(--accent); }
+
+    .subtitle {
+      font-size: 0.7rem; letter-spacing: 0.25em;
+      color: var(--text-dim); text-transform: uppercase;
+    }
+
+    .header-meta { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+
+    .stat-chip { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .stat-chip .val { font-family: var(--sans); font-weight: 700; font-size: 1.4rem; color: var(--accent); }
+    .stat-chip .lbl { font-size: 0.6rem; letter-spacing: 0.2em; color: var(--text-dim); text-transform: uppercase; }
+
+    .admin-toggle {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--mono); font-size: 0.7rem;
+      letter-spacing: 0.15em; padding: 8px 16px; cursor: pointer;
+      transition: all 0.2s; text-transform: uppercase;
+    }
+    .admin-toggle:hover, .admin-toggle.active { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 10px rgba(0,200,255,0.2); }
+    .admin-toggle.active { color: var(--danger); border-color: var(--danger); }
+
+    .controls {
+      position: relative; z-index: 10;
+      padding: 16px 40px;
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-wrap { position: relative; flex: 1; min-width: 200px; }
+    .search-wrap input {
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--mono); font-size: 0.8rem;
+      padding: 8px 12px 8px 36px; outline: none; transition: border-color 0.2s;
+    }
+    .search-wrap input:focus { border-color: var(--accent); }
+    .search-wrap input::placeholder { color: var(--text-dim); }
+    .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-dim); font-size: 0.8rem; }
+
+    .filter-btn {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--mono); font-size: 0.7rem;
+      letter-spacing: 0.1em; padding: 8px 14px; cursor: pointer;
+      transition: all 0.2s; text-transform: uppercase;
+    }
+    .filter-btn:hover, .filter-btn.active { border-color: var(--accent); color: var(--accent); }
+    .filter-btn[data-type="room-server"].active { border-color: var(--accent2); color: var(--accent2); }
+    .filter-btn[data-type="repeater"].active    { border-color: var(--warning); color: var(--warning); }
+    .filter-btn[data-type="client"].active      { border-color: var(--success); color: var(--success); }
+
+    .add-btn {
+      background: var(--accent); border: none; color: #000;
+      font-family: var(--mono); font-size: 0.75rem; font-weight: bold;
+      letter-spacing: 0.15em; padding: 9px 18px; cursor: pointer;
+      transition: all 0.2s; text-transform: uppercase; display: none;
+    }
+    .add-btn:hover { background: #fff; box-shadow: 0 0 20px rgba(0,200,255,0.4); }
+    body.admin-mode .add-btn { display: block; }
+
+    main { position: relative; z-index: 10; padding: 32px 40px; }
+
+    .node-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+
+    .node-card {
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 20px; position: relative;
+      transition: border-color 0.2s, transform 0.2s;
+      animation: fadeIn 0.3s ease both;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .node-card:hover { border-color: rgba(0,200,255,0.3); transform: translateY(-2px); cursor: pointer; }
+
+    .node-card::before {
+      content: ''; position: absolute; top: 0; left: 0;
+      width: 20px; height: 20px;
+      border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); opacity: 0.6;
+    }
+    .node-card::after {
+      content: ''; position: absolute; bottom: 0; right: 0;
+      width: 20px; height: 20px;
+      border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); opacity: 0.3;
+    }
+
+    .node-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+    .node-id { font-family: var(--sans); font-weight: 700; font-size: 1rem; color: #fff; letter-spacing: 0.05em; }
+
+    .type-badge { font-size: 0.6rem; letter-spacing: 0.2em; padding: 3px 8px; border: 1px solid; text-transform: uppercase; white-space: nowrap; }
+    .type-badge.room-server { border-color: var(--accent2); color: var(--accent2); }
+    .type-badge.repeater    { border-color: var(--warning); color: var(--warning); }
+    .type-badge.client      { border-color: var(--success); color: var(--success); }
+
+    .status-badge {
+      font-size: 0.55rem; letter-spacing: 0.2em; padding: 2px 8px;
+      text-transform: uppercase; border-radius: 2px; margin-left: 8px;
+    }
+    .status-badge.active   { background: rgba(0,229,160,0.15); color: var(--success); }
+    .status-badge.inactive { background: rgba(255,68,102,0.15); color: var(--danger); }
+    .status-badge.planned  { background: rgba(170,85,255,0.15); color: #aa55ff; }
+
+    .node-card.inactive { opacity: 0.55; }
+    .node-card.inactive:hover { opacity: 0.8; }
+    .node-card.planned { border-style: dashed; border-color: rgba(170,85,255,0.35); }
+    .node-card.planned:hover { border-color: rgba(170,85,255,0.7); }
+
+    .node-field { margin-bottom: 10px; }
+    .field-label { font-size: 0.6rem; letter-spacing: 0.2em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
+    .field-value { font-size: 0.8rem; color: var(--text); line-height: 1.4; }
+
+    .node-actions { display: none; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+    body.admin-mode .node-actions { display: flex; }
+
+    .btn-edit, .btn-delete {
+      flex: 1; background: transparent; font-family: var(--mono);
+      font-size: 0.65rem; letter-spacing: 0.15em; padding: 6px;
+      cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+    }
+    .btn-edit   { border: 1px solid var(--border); color: var(--text-dim); }
+    .btn-edit:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-delete { border: 1px solid var(--border); color: var(--text-dim); }
+    .btn-delete:hover { border-color: var(--danger); color: var(--danger); }
+
+    .empty-state { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-dim); font-size: 0.8rem; letter-spacing: 0.15em; }
+
+    /* Loading */
+    .loading { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-dim); font-size: 0.75rem; letter-spacing: 0.2em; }
+    .loading::after { content: ''; animation: dots 1.2s infinite; }
+    @keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} 100%{content:'.'} }
+
+    /* Modals */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.8); z-index: 100;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface); border: 1px solid var(--accent);
+      padding: 32px; width: 100%; max-width: 480px; position: relative;
+      box-shadow: 0 0 60px rgba(0,200,255,0.15);
+      animation: modalIn 0.2s ease;
+    }
+    @keyframes modalIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+    .modal-title { font-family: var(--sans); font-weight: 700; font-size: 1rem; letter-spacing: 0.1em; color: #fff; margin-bottom: 24px; text-transform: uppercase; }
+
+    .form-field { margin-bottom: 16px; }
+    .form-field label { display: block; font-size: 0.6rem; letter-spacing: 0.2em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; }
+    .form-field input, .form-field select, .form-field textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--mono); font-size: 0.8rem;
+      padding: 8px 12px; outline: none; transition: border-color 0.2s;
+    }
+    .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--accent); }
+    .form-field textarea { resize: vertical; min-height: 70px; }
+    .form-field select option { background: var(--bg); }
+
+    .field-error { color: var(--danger); font-size: 0.65rem; margin-top: 4px; display: none; }
+
+    .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
+
+    .btn-save {
+      flex: 1; background: var(--accent); border: none; color: #000;
+      font-family: var(--mono); font-size: 0.75rem; font-weight: bold;
+      letter-spacing: 0.15em; padding: 10px; cursor: pointer;
+      text-transform: uppercase; transition: all 0.2s;
+    }
+    .btn-save:hover { background: #fff; }
+    .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-cancel {
+      flex: 1; background: transparent; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--mono); font-size: 0.75rem;
+      letter-spacing: 0.15em; padding: 10px; cursor: pointer;
+      text-transform: uppercase; transition: all 0.2s;
+    }
+    .btn-cancel:hover { border-color: var(--text-dim); color: var(--text); }
+
+    #pwd-modal .modal { max-width: 360px; }
+    .pwd-error { color: var(--danger); font-size: 0.7rem; margin-top: 8px; display: none; }
+
+    .toast {
+      position: fixed; bottom: 30px; right: 30px;
+      background: var(--surface2); border: 1px solid var(--accent);
+      color: var(--accent); font-family: var(--mono); font-size: 0.75rem;
+      letter-spacing: 0.1em; padding: 12px 20px; z-index: 200;
+      opacity: 0; transform: translateY(10px); transition: all 0.3s; pointer-events: none;
+    }
+    .toast.error { border-color: var(--danger); color: var(--danger); }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    /* Single node overlay */
+    .single-overlay {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .single-overlay .single-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 20px;
+      width: 100%; max-width: 580px;
+      animation: modalIn 0.25s ease;
+    }
+
+    .single-overlay .node-card {
+      width: 100%;
+      font-size: 0.9rem;
+      padding: 28px;
+      border-color: rgba(0,200,255,0.3);
+      box-shadow: 0 0 60px rgba(0,200,255,0.1);
+    }
+
+    .single-overlay .node-id { font-size: 1.2rem; }
+    .single-overlay .type-badge { font-size: 0.7rem; padding: 4px 10px; }
+    .single-overlay .field-value { font-size: 0.85rem; }
+
+    .btn-close {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--mono); font-size: 0.75rem;
+      letter-spacing: 0.15em; padding: 10px 28px; cursor: pointer;
+      transition: all 0.2s; text-transform: uppercase;
+      text-decoration: none; display: inline-block;
+    }
+    .btn-close:hover { border-color: var(--accent); color: var(--accent); }
+
+    footer {
+      position: relative; z-index: 10;
+      padding: 24px 40px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      line-height: 1.8;
+    }
+
+    /* Expanded card: map and image */
+    .node-map {
+      width: 100%; height: 220px; margin-top: 6px;
+      border: 1px solid var(--border);
+      position: relative; z-index: 0;
+    }
+    .leaflet-container { background: var(--surface2); font-family: var(--mono); }
+    .node-image-wrap { margin-top: 6px; }
+    .node-image-wrap img {
+      width: 100%; max-height: 260px; object-fit: cover;
+      border: 1px solid var(--border); display: block;
+    }
+
+    /* Two-column form row for lat/lon */
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-field { flex: 1; }
+
+    .field-hint { font-size: 0.6rem; color: var(--text-dim); margin-top: 4px; letter-spacing: 0.05em; }
+
+    @media (max-width: 600px) {
+      header, .controls, main, footer { padding-left: 20px; padding-right: 20px; }
+      .node-grid { grid-template-columns: 1fr; }
+      .form-row { flex-direction: column; gap: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-block">
+    <div class="logo">IRIDIUM<span>·</span></div>
+    <div class="subtitle">MeshCore Device Registry</div>
+  </div>
+  <div class="header-meta">
+    <div class="stat-chip">
+      <span class="val" id="stat-total">—</span>
+      <span class="lbl">Total Nodes</span>
+    </div>
+    <div class="stat-chip">
+      <span class="val" id="stat-room-server" style="color:var(--accent2)">—</span>
+      <span class="lbl">Room Server</span>
+    </div>
+    <div class="stat-chip">
+      <span class="val" id="stat-repeater" style="color:var(--warning)">—</span>
+      <span class="lbl">Repeater</span>
+    </div>
+    <div class="stat-chip">
+      <span class="val" id="stat-client" style="color:var(--success)">—</span>
+      <span class="lbl">Client</span>
+    </div>
+    <button class="admin-toggle" id="admin-toggle-btn" onclick="toggleAdmin()">[ ADMIN ]</button>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input type="text" id="search-input" placeholder="Search nodes..." oninput="renderCards()" />
+  </div>
+  <button class="filter-btn active" data-type="all"         onclick="setFilter('all')">All</button>
+  <button class="filter-btn"        data-type="room-server" onclick="setFilter('room-server')">Room Server</button>
+  <button class="filter-btn"        data-type="repeater"    onclick="setFilter('repeater')">Repeater</button>
+  <button class="filter-btn"        data-type="client"   onclick="setFilter('client')">Client</button>
+  <button class="add-btn" onclick="openAddModal()">+ Add Node</button>
+</div>
+
+<main>
+  <div class="node-grid" id="node-grid">
+    <div class="loading">Loading nodes</div>
+  </div>
+</main>
+
+<!-- Login Modal -->
+<div class="modal-overlay" id="pwd-modal">
+  <div class="modal">
+    <div class="modal-title">Admin Access</div>
+    <div class="form-field">
+      <label>Password</label>
+      <input type="password" id="pwd-input" placeholder="Enter admin password"
+             onkeydown="if(event.key==='Enter')submitLogin()" />
+      <div class="pwd-error" id="pwd-error">Incorrect password.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-save" id="login-btn" onclick="submitLogin()">Unlock</button>
+      <button class="btn-cancel" onclick="closePwdModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="node-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Add Node</div>
+    <div class="form-field">
+      <label>Node ID / Name</label>
+      <input type="text" id="f-id" placeholder="e.g. IRIDIUM-09" />
+      <div class="field-error" id="f-id-error"></div>
+    </div>
+    <div class="form-field">
+      <label>Type</label>
+      <select id="f-type">
+        <option value="room-server">Room Server</option>
+        <option value="repeater">Repeater</option>
+        <option value="client">Client</option>
+      </select>
+    </div>
+    <div class="form-field">
+      <label>Status</label>
+      <select id="f-status">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+        <option value="planned">Planned</option>
+      </select>
+    </div>
+    <div class="form-field">
+      <label>Location</label>
+      <input type="text" id="f-location" placeholder="e.g. Rooftop — Building A" />
+    </div>
+    <div class="form-field">
+      <label>Hardware</label>
+      <input type="text" id="f-hardware" placeholder="e.g. RAK4631 (nRF52840 + SX1262)" />
+    </div>
+    <div class="form-field">
+      <label>Notes / Function</label>
+      <textarea id="f-notes" placeholder="Describe this node's role and any relevant notes..."></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>Latitude (optional)</label>
+        <input type="number" id="f-lat" placeholder="e.g. 37.7749" step="any" />
+      </div>
+      <div class="form-field">
+        <label>Longitude (optional)</label>
+        <input type="number" id="f-lon" placeholder="e.g. -122.4194" step="any" />
+      </div>
+    </div>
+    <div class="form-field">
+      <div class="field-hint">Coordinates are used to show an approximate OSM map on the expanded node card.</div>
+    </div>
+    <div class="form-field">
+      <label>Photo URL (optional)</label>
+      <input type="url" id="f-image" placeholder="https://example.com/node-photo.jpg" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-save" id="save-btn" onclick="saveNode()">Save Node</button>
+      <button class="btn-cancel" onclick="closeNodeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Not affiliated with Iridium Communications Inc. or their satellite constellation.<br>
+  No satellites were harmed in the making of this mesh network. This is just a hobby project with radios and overbooked free time.
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // ── State ─────────────────────────────────────────────────────────────────
+  let nodes        = [];
+  let activeFilter = 'all';
+  let editingId    = null;
+  let isAdmin      = false;
+  let singleNodeSlug = null;
+
+  // Check if we're on a node sub-path
+  (function detectSlug() {
+    const p = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    if (p && !p.startsWith('api')) singleNodeSlug = decodeURIComponent(p).toLowerCase();
+  })();
+
+  // ── API helpers ───────────────────────────────────────────────────────────
+  async function api(method, path, body) {
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin'
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data;
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  async function init() {
+    try {
+      const status = await api('GET', '/api/auth-status');
+      if (status.authenticated) enableAdmin();
+    } catch(e) {}
+    await fetchNodes();
+  }
+
+  async function fetchNodes() {
+    try {
+      nodes = await api('GET', '/api/nodes');
+      if (singleNodeSlug) {
+        renderSingleNode();
+      } else {
+        renderCards();
+      }
+    } catch(e) {
+      document.getElementById('node-grid').innerHTML =
+        `<div class="empty-state">Failed to load nodes — ${esc(e.message)}</div>`;
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  function renderCards() {
+    const grid  = document.getElementById('node-grid');
+    const query = document.getElementById('search-input').value.toLowerCase();
+
+    const filtered = nodes.filter(n => {
+      const matchType   = activeFilter === 'all' || n.type === activeFilter;
+      const matchSearch = !query ||
+        n.id.toLowerCase().includes(query) ||
+        (n.location || '').toLowerCase().includes(query) ||
+        (n.hardware  || '').toLowerCase().includes(query) ||
+        (n.notes     || '').toLowerCase().includes(query);
+      return matchType && matchSearch;
+    });
+
+    document.getElementById('stat-total').textContent       = nodes.length;
+    document.getElementById('stat-room-server').textContent = nodes.filter(n=>n.type==='room-server').length;
+    document.getElementById('stat-repeater').textContent    = nodes.filter(n=>n.type==='repeater').length;
+    document.getElementById('stat-client').textContent      = nodes.filter(n=>n.type==='client').length;
+
+    grid.innerHTML = filtered.length === 0
+      ? `<div class="empty-state">NO NODES MATCH CURRENT FILTERS</div>`
+      : filtered.map((n, i) => `
+        <div class="node-card${(n.status||'active')==='inactive'?' inactive':(n.status==='planned'?' planned':'')}" style="animation-delay:${i * 0.04}s" onclick="if(!event.target.closest('.node-actions'))window.location.href='/'+encodeURIComponent('${esc(n.id)}')">
+          <div class="node-header">
+            <div class="node-id">${esc(n.id)}<span class="status-badge ${n.status||'active'}">${n.status||'active'}</span></div>
+            <span class="type-badge ${n.type}">${n.type}</span>
+          </div>
+          <div class="node-field">
+            <div class="field-label">Location</div>
+            <div class="field-value">${esc(n.location) || '—'}</div>
+          </div>
+          <div class="node-field">
+            <div class="field-label">Hardware</div>
+            <div class="field-value">${esc(n.hardware) || '—'}</div>
+          </div>
+          <div class="node-field">
+            <div class="field-label">Notes / Function</div>
+            <div class="field-value">${esc(n.notes) || '—'}</div>
+          </div>
+          <div class="node-actions">
+            <button class="btn-edit"   onclick="openEditModal('${esc(n.id)}')">Edit</button>
+            <button class="btn-delete" onclick="deleteNode('${esc(n.id)}')">Delete</button>
+          </div>
+        </div>
+      `).join('');
+  }
+
+  // ── Single node view ────────────────────────────────────────────────────
+  function renderSingleNode() {
+    // Render the full registry behind the overlay
+    renderCards();
+
+    const node = nodes.find(n => n.id.toLowerCase() === singleNodeSlug);
+
+    // Remove any existing overlay
+    const existing = document.getElementById('single-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'single-overlay';
+    overlay.className = 'single-overlay';
+
+    if (!node) {
+      overlay.innerHTML = `<div class="single-wrap">
+        <div class="empty-state" style="color:var(--text-dim)">NODE NOT FOUND: ${esc(singleNodeSlug)}</div>
+        <a href="/" class="btn-close">Back to Registry</a>
+      </div>`;
+    } else {
+      document.title = `IRIDIUM MC NODES — ${node.id}`;
+      const hasCoords = node.lat != null && node.lon != null && !isNaN(node.lat) && !isNaN(node.lon);
+      const hasImage  = !!(node.image && node.image.trim());
+      overlay.innerHTML = `<div class="single-wrap">
+        <div class="node-card${(node.status||'active')==='inactive'?' inactive':(node.status==='planned'?' planned':'')}">
+          <div class="node-header">
+            <div class="node-id">${esc(node.id)}<span class="status-badge ${node.status||'active'}">${node.status||'active'}</span></div>
+            <span class="type-badge ${node.type}">${node.type}</span>
+          </div>
+          <div class="node-field">
+            <div class="field-label">Location</div>
+            <div class="field-value">${esc(node.location) || '—'}</div>
+          </div>
+          <div class="node-field">
+            <div class="field-label">Hardware</div>
+            <div class="field-value">${esc(node.hardware) || '—'}</div>
+          </div>
+          <div class="node-field">
+            <div class="field-label">Notes / Function</div>
+            <div class="field-value">${esc(node.notes) || '—'}</div>
+          </div>
+          ${hasImage ? `<div class="node-field">
+            <div class="field-label">Photo</div>
+            <div class="node-image-wrap">
+              <img src="${esc(node.image)}" alt="${esc(node.id)}" loading="lazy" onerror="this.closest('.node-field').style.display='none'" />
+            </div>
+          </div>` : ''}
+          ${hasCoords ? `<div class="node-field">
+            <div class="field-label">Approximate Location (OSM)</div>
+            <div id="node-map" class="node-map"></div>
+          </div>` : ''}
+          <div class="node-actions">
+            <button class="btn-edit"   onclick="openEditModal('${esc(node.id)}')">Edit</button>
+            <button class="btn-delete" onclick="deleteNode('${esc(node.id)}')">Delete</button>
+          </div>
+        </div>
+        <a href="/" class="btn-close">✕ Close</a>
+      </div>`;
+    }
+
+    // Click outside the card to close
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) window.location.href = '/';
+    });
+
+    document.body.appendChild(overlay);
+
+    // Initialize Leaflet map after the element is in the DOM
+    if (node && node.lat != null && node.lon != null && !isNaN(node.lat) && !isNaN(node.lon)) {
+      const mapEl = document.getElementById('node-map');
+      const map = L.map(mapEl, { zoomControl: true, attributionControl: true })
+                   .setView([node.lat, node.lon], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
+        maxZoom: 19
+      }).addTo(map);
+      L.marker([node.lat, node.lon]).addTo(map);
+    }
+  }
+
+  function esc(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Filter ────────────────────────────────────────────────────────────────
+  function setFilter(type) {
+    if (type !== 'all' && activeFilter === type) {
+      activeFilter = 'all';
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    } else {
+      activeFilter = type;
+      document.querySelectorAll('.filter-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.type === type));
+    }
+    renderCards();
+  }
+
+  // ── Admin ─────────────────────────────────────────────────────────────────
+  function enableAdmin() {
+    isAdmin = true;
+    document.body.classList.add('admin-mode');
+    document.getElementById('admin-toggle-btn').classList.add('active');
+    document.getElementById('admin-toggle-btn').textContent = '[ LOGOUT ]';
+  }
+
+  function disableAdmin() {
+    isAdmin = false;
+    document.body.classList.remove('admin-mode');
+    document.getElementById('admin-toggle-btn').classList.remove('active');
+    document.getElementById('admin-toggle-btn').textContent = '[ ADMIN ]';
+  }
+
+  async function toggleAdmin() {
+    if (isAdmin) {
+      try {
+        await api('POST', '/api/logout');
+        disableAdmin();
+        showToast('Logged out');
+      } catch(e) { showToast('Logout failed', true); }
+    } else {
+      document.getElementById('pwd-modal').classList.add('open');
+      setTimeout(() => document.getElementById('pwd-input').focus(), 50);
+    }
+  }
+
+  async function submitLogin() {
+    const password = document.getElementById('pwd-input').value;
+    if (!password) return;
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true; btn.textContent = 'Checking...';
+    try {
+      await api('POST', '/api/login', { password });
+      enableAdmin();
+      closePwdModal();
+      showToast('Admin mode enabled');
+      renderCards();
+    } catch(e) {
+      const errEl = document.getElementById('pwd-error');
+      errEl.textContent = e.message || 'Incorrect password.';
+      errEl.style.display = 'block';
+      document.getElementById('pwd-input').value = '';
+      document.getElementById('pwd-input').focus();
+    } finally {
+      btn.disabled = false; btn.textContent = 'Unlock';
+    }
+  }
+
+  function closePwdModal() {
+    document.getElementById('pwd-modal').classList.remove('open');
+    document.getElementById('pwd-input').value = '';
+    document.getElementById('pwd-error').style.display = 'none';
+  }
+
+  // ── Add / Edit ────────────────────────────────────────────────────────────
+  function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Node';
+    document.getElementById('f-id').value        = '';
+    document.getElementById('f-id').disabled     = false;
+    document.getElementById('f-type').value      = 'room-server';
+    document.getElementById('f-status').value    = 'active';
+    document.getElementById('f-location').value  = '';
+    document.getElementById('f-hardware').value  = '';
+    document.getElementById('f-notes').value     = '';
+    document.getElementById('f-lat').value       = '';
+    document.getElementById('f-lon').value       = '';
+    document.getElementById('f-image').value     = '';
+    document.getElementById('f-id-error').style.display = 'none';
+    document.getElementById('node-modal').classList.add('open');
+    setTimeout(() => document.getElementById('f-id').focus(), 50);
+  }
+
+  function openEditModal(id) {
+    const n = nodes.find(x => x.id === id);
+    if (!n) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Node';
+    document.getElementById('f-id').value        = n.id;
+    document.getElementById('f-id').disabled     = true;
+    document.getElementById('f-type').value      = n.type;
+    document.getElementById('f-status').value    = n.status || 'active';
+    document.getElementById('f-location').value  = n.location;
+    document.getElementById('f-hardware').value  = n.hardware;
+    document.getElementById('f-notes').value     = n.notes;
+    document.getElementById('f-lat').value       = n.lat != null ? n.lat : '';
+    document.getElementById('f-lon').value       = n.lon != null ? n.lon : '';
+    document.getElementById('f-image').value     = n.image || '';
+    document.getElementById('f-id-error').style.display = 'none';
+    document.getElementById('node-modal').classList.add('open');
+  }
+
+  function closeNodeModal() {
+    document.getElementById('node-modal').classList.remove('open');
+  }
+
+  async function saveNode() {
+    const id       = document.getElementById('f-id').value.trim();
+    const type     = document.getElementById('f-type').value;
+    const status   = document.getElementById('f-status').value;
+    const location = document.getElementById('f-location').value.trim();
+    const hardware = document.getElementById('f-hardware').value.trim();
+    const notes    = document.getElementById('f-notes').value.trim();
+    const latRaw   = document.getElementById('f-lat').value.trim();
+    const lonRaw   = document.getElementById('f-lon').value.trim();
+    const image    = document.getElementById('f-image').value.trim();
+    const lat      = latRaw !== '' ? parseFloat(latRaw) : null;
+    const lon      = lonRaw !== '' ? parseFloat(lonRaw) : null;
+
+    const errEl = document.getElementById('f-id-error');
+    if (!id) {
+      errEl.textContent = 'Node ID is required.';
+      errEl.style.display = 'block';
+      return;
+    }
+    errEl.style.display = 'none';
+
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+
+    try {
+      if (editingId) {
+        const updated = await api('PUT', `/api/nodes/${encodeURIComponent(editingId)}`, { type, status, location, hardware, notes, lat, lon, image });
+        const idx = nodes.findIndex(n => n.id === editingId);
+        nodes[idx] = updated;
+        showToast(`${id} updated`);
+      } else {
+        const created = await api('POST', '/api/nodes', { id, type, status, location, hardware, notes, lat, lon, image });
+        nodes.push(created);
+        showToast(`${id} added`);
+      }
+      closeNodeModal();
+      renderCards();
+    } catch(e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save Node';
+    }
+  }
+
+  async function deleteNode(id) {
+    if (!confirm(`Delete ${id}? This cannot be undone.`)) return;
+    try {
+      await api('DELETE', `/api/nodes/${encodeURIComponent(id)}`);
+      nodes = nodes.filter(n => n.id !== id);
+      renderCards();
+      showToast(`${id} deleted`);
+    } catch(e) {
+      showToast(`Delete failed: ${e.message}`, true);
+    }
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg, error = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (error ? ' error' : '');
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  // Close modals on overlay click
+  document.getElementById('pwd-modal').addEventListener('click', e => { if (e.target===e.currentTarget) closePwdModal(); });
+  document.getElementById('node-modal').addEventListener('click', e => { if (e.target===e.currentTarget) closeNodeModal(); });
+  document.addEventListener('keydown', e => { if (e.key==='Escape') { closePwdModal(); closeNodeModal(); } });
+
+  init();
+</script>
+</body>
+</html>

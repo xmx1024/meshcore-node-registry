@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Generated config (contains bcrypt hash + session secret — never commit)
+iridium/config.json
+
+# Node data (your live registry data — keep private)
+iridium/data/nodes.json
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Build artifacts / archives
+*.zip

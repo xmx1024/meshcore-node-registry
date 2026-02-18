@@ -1,8 +1,8 @@
-# Iridium Registry
+# MeshCore Node Registry
 
 A self-hosted node registry for [MeshCore](https://github.com/ripplebiz/MeshCore) LoRa mesh networks. Catalog and manage your radio nodes with a clean, dark terminal-aesthetic web interface.
 
-![Node Registry](https://img.shields.io/badge/stack-Node.js%20%2B%20Express-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Stack](https://img.shields.io/badge/stack-Node.js%20%2B%20Express-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## Features
 
@@ -39,11 +39,13 @@ npm start
 
 Then open `http://localhost:3000`.
 
+The network name and branding in `public/index.html` can be customised to match your own mesh network.
+
 ## Node Fields
 
 | Field | Required | Notes |
 |---|---|---|
-| ID / Name | Yes | Unique identifier, e.g. `IRIDIUM-03` |
+| ID / Name | Yes | Unique identifier, e.g. `NODE-03` |
 | Type | Yes | `room-server`, `repeater`, or `client` |
 | Status | Yes | `active`, `inactive`, or `planned` |
 | Location | No | Human-readable description |
